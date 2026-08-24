@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>顧客回購分析工具 | Customer Repurchase Analyzer</title>
+  <!-- Google Fonts & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- PapaParse for CSV handling (with offline fallback in app.js) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-brand">
+        <div class="brand-icon">
+          <i class="fa-solid fa-chart-pie"></i>
+        </div>
+        <div>
+          <h1>顧客回購分析與名單篩選系統</h1> 
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="btn-load-demo" class="btn btn-secondary">
+          <i class="fa-solid fa-wand-magic-sparkles"></i> 載入測試資料
+        </button>
+      </div>
+    </header>
+    <!-- Main Grid -->
+    <main class="main-content">
+      <!-- Left Column: Settings & Upload -->
+      <section class="panel-section">
+        <!-- 1. CSV File Upload Panel -->
+        <div class="card card-upload">
+          <div class="card-header">
+            <h2><span class="step-num">1</span> 上傳 CSV 檔</h2>
+          </div>
+          <div class="card-body">
+            <div id="dropzone" class="dropzone">
+              <input type="file" id="file-input" multiple accept=".csv" style="display: none;">
+              <div class="dropzone-content">
+                <div class="dropzone-icon">
+                  <i class="fa-solid fa-cloud-arrow-up"></i>
+                </div>
+                <div class="dropzone-text">
+                  <strong>點擊選擇 CSV 檔</strong> 或 將檔案拖拽至此
+                </div>
+              </div>
+            </div>
+            <!-- Uploaded Files List -->
+            <div id="file-list-container" class="file-list-container hidden">
+              <div class="file-list-header">
+                <span>已選檔案 (<span id="file-count">0</span>)</span>
+                <button id="btn-clear-files" class="btn-text text-danger">
+                  <i class="fa-solid fa-trash-can"></i> 清除
+                </button>
+              </div>
+              <ul id="file-list" class="file-list"></ul>
+            </div>
+          </div>
+        </div>
+        <!-- 2. Parameter Settings Panel -->
+        <div class="card card-settings">
+          <div class="card-header">
+            <h2><span class="step-num">2</span> 篩選條件設定</h2>
+            <button id="btn-reset-params" class="btn-text">
+              <i class="fa-solid fa-rotate-left"></i> 重置
+            </button>
+          </div>
+          <div class="card-body">
+            <div class="form-grid">
+              <!-- TARGET_PRODUCT -->
+              <div class="form-group">
+                <label for="target-product">
+                  <i class="fa-solid fa-tag"></i> 商品名稱 
+                </label>
+                <input type="text" id="target-product" value="QQ" placeholder="例如: QQ">
+              </div>
+              <!-- TARGET_MONTH -->
+              <div class="form-group">
+                <label for="target-month">
+                  <i class="fa-solid fa-calendar-day"></i> 目標新客年月 
+                </label>
+                <input type="text" id="target-month" value="2025/8" placeholder="YYYY/M (例如 2025/8)">
+              </div>
+              <!-- PROMO_CODES -->
+              <div class="form-group full-width">
+                <label for="promo-codes">
+                  <i class="fa-solid fa-ticket"></i> 販促コード 
+                </label>
+                <input type="text" id="promo-codes" value="QQEXOTO2507 ,QQEXOTO25 ,QQOTO2024" placeholder="可用逗號分隔多組">
+              </div>
+              <!-- REPURCHASE_PERIOD -->
+              <div class="form-group full-width">
+                <label for="repurchase-period">
+                  <i class="fa-solid fa-calendar-week"></i> 回購區間 
+                </label>
+                <input type="text" id="repurchase-period" value="2026/3-2026/6" placeholder="YYYY/M-YYYY/M">
+              </div>
+              <!-- Output Column Options -->
+              <div class="form-group full-width">
+                <label><i class="fa-solid fa-list-check"></i> 匯出設定</label>
+                <div class="checkbox-group">
+                  <label class="checkbox-label">
+                    <input type="checkbox" id="col-mode-standard" checked disabled>
+                    <span>基本欄位 (新規/既存、電話番号、Eメールアドレス)</span>
+                  </label>
+                  <label class="checkbox-label">
+                    <input type="checkbox" id="col-include-id" checked>
+                    <span>包含顧客ID</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+            <!-- Run Analysis Button -->
+            <div class="action-bar">
+              <button id="btn-run-analysis" class="shiny-cta" type="button">
+                <span>
+                  <i class="fa-solid fa-play"></i>
+                  開始分析與篩選
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+      <!-- Right Column: Results & Dashboard -->
+      <section class="panel-section">
+        <!-- 3. Results Dashboard -->
+        <div id="results-panel" class="card card-results">
+          <div class="card-header">
+            <h2><span class="step-num">3</span> 分析結果與下載</h2>
+            <span id="analysis-status-badge" class="badge badge-info">待執行</span>
+          </div>
+          <div class="card-body">
+            <!-- Metric Cards -->
+            <div class="metrics-grid">
+              <div class="metric-card">
+                <div class="metric-icon icon-blue"><i class="fa-solid fa-database"></i></div>
+                <div class="metric-info">
+                  <span class="metric-label">總原始筆數</span>
+                  <span id="stat-total-rows" class="metric-value">0</span>
+                  <span id="stat-total-files" class="metric-sub">0 個檔案</span>
+                </div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-icon icon-purple"><i class="fa-solid fa-users-viewfinder"></i></div>
+                <div class="metric-info">
+                  <span class="metric-label">目標月符合人數</span>
+                  <span id="stat-target-customers" class="metric-value">0</span>
+                  <span id="stat-target-orders" class="metric-sub">促銷碼顧客</span>
+                </div>
+              </div>
+              <div class="metric-card metric-highlight-success">
+                <div class="metric-icon icon-green"><i class="fa-solid fa-user-check"></i></div>
+                <div class="metric-info">
+                  <span class="metric-label">【有回購】人數</span>
+                  <span id="stat-rep-count" class="metric-value text-success">0</span>
+                  <span id="stat-rep-rate" class="metric-sub">回購率: 0%</span>
+                </div>
+              </div>
+              <div class="metric-card metric-highlight-danger">
+                <div class="metric-icon icon-red"><i class="fa-solid fa-user-xmark"></i></div>
+                <div class="metric-info">
+                  <span class="metric-label">【無回購】人數</span>
+                  <span id="stat-no-rep-count" class="metric-value text-danger">0</span>
+                  <span id="stat-no-rep-rate" class="metric-sub">未回購率: 0%</span>
+                </div>
+              </div>
+            </div>
+            <!-- Download Buttons Section -->
+            <div class="download-section">
+              <div class="download-buttons-grid">
+                <!-- Button 1: Repurchased -->
+                <div class="download-card download-card-success">
+                  <div class="download-card-header">
+                    <i class="fa-solid fa-circle-check text-success"></i>
+                    <div>
+                      <h4 id="rep-file-label">【有回購名單】</h4>
+                      <code id="rep-filename-preview">QQ2025_8回購區間2026_3-2026_6.csv</code>
+                    </div>
+                  </div>
+                  <button id="btn-download-rep" class="btn btn-success btn-block" disabled>
+                    <i class="fa-solid fa-download"></i> 下載【有回購名單】CSV
+                  </button>
+                </div>
+                <!-- Button 2: Non-repurchased -->
+                <div class="download-card download-card-danger">
+                  <div class="download-card-header">
+                    <i class="fa-solid fa-circle-xmark text-danger"></i>
+                    <div>
+                      <h4 id="no-rep-file-label">【無回購名單】</h4>
+                      <code id="no-rep-filename-preview">QQ2025_8無回購區間2026_3-2026_6.csv</code>
+                    </div>
+                  </div>
+                  <button id="btn-download-no-rep" class="btn btn-danger btn-block" disabled>
+                    <i class="fa-solid fa-download"></i> 下載【無回購名單】CSV
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- 4. Data Preview & Logs Tabs -->
+        <div class="card card-preview">
+          <div class="card-header border-bottom-0">
+            <div class="tabs-nav">
+              <button class="tab-btn active" data-tab="tab-rep">
+                <i class="fa-solid fa-table-list text-success"></i> 有回購預覽 (<span id="tab-rep-count">0</span>)
+              </button>
+              <button class="tab-btn" data-tab="tab-no-rep">
+                <i class="fa-solid fa-table-list text-danger"></i> 無回購預覽 (<span id="tab-no-rep-count">0</span>)
+              </button>
+              <button class="tab-btn" data-tab="tab-logs">
+                <i class="fa-solid fa-terminal"></i> 處理日誌
+              </button>
+            </div>
+            <div class="preview-controls">
+              <input type="text" id="preview-search" placeholder="搜尋內容..." class="input-sm">
+            </div>
+          </div>
+          <div class="card-body p-0">
+            <!-- Tab 1: Repurchase Preview -->
+            <div id="tab-rep" class="tab-content active">
+              <div class="table-wrapper">
+                <table class="data-table">
+                  <thead id="rep-table-head">
+                    <tr>
+                      <th>顧客ID</th>
+                      <th>新規/既存（全受注）</th>
+                      <th>電話番号</th>
+                      <th>Eメールアドレス</th>
+                    </tr>
+                  </thead>
+                  <tbody id="rep-table-body">
+                    <tr><td colspan="4" class="empty-state">尚無資料，請先上傳檔案並點擊「開始分析與篩選」</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <!-- Tab 2: No Repurchase Preview -->
+            <div id="tab-no-rep" class="tab-content">
+              <div class="table-wrapper">
+                <table class="data-table">
+                  <thead id="no-rep-table-head">
+                    <tr>
+                      <th>顧客ID</th>
+                      <th>新規/既存（全受注）</th>
+                      <th>電話番号</th>
+                      <th>Eメールアドレス</th>
+                    </tr>
+                  </thead>
+                  <tbody id="no-rep-table-body">
+                    <tr><td colspan="4" class="empty-state">尚無資料，請先上傳檔案並點擊「開始分析與篩選」</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <!-- Tab 3: System Logs -->
+            <div id="tab-logs" class="tab-content">
+              <div id="logs-console" class="logs-console">
+                <div class="log-line info">[系統就緒] 請上傳 CSV 檔或點擊「載入測試資料」。</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+    <!-- Footer -->
+    <footer class="app-footer">
+      <p>顧客回購分析與名單篩選系統 &copy; 2026 版權歸佳蓁所有</p>
+    </footer>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
